@@ -1,12 +1,18 @@
 #include <iostream>
 #include <winsock2.h>
 
+using namespace std;
+
 #pragma comment(lib, "ws2_32.lib")
+
+#define LIMIT 10000000
 
 int main() {
     WSADATA wsaData;
     SOCKET clientSocket;
     struct sockaddr_in serverAddr;
+    int upperLimit = LIMIT;
+    int lowerLimit = 2;
 
     // Initialize Winsock
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -37,7 +43,33 @@ int main() {
 
     std::cout << "Connected to server." << std::endl;
 
-    int range[2] = { 1, 100 }; // example range
+    do {
+        cout << "Enter lower bound (must be greater than or equal to 2): ";
+        cin >> lowerLimit;
+
+        if (lowerLimit < 2) {
+            cout << "Error: Please enter a number greater than or equal to 2.\n";
+        }
+        else if (lowerLimit > 10000000) {
+            cout << "Error: Please enter a number less than or equal to 10000000.\n";
+        }
+
+    } while (lowerLimit < 2 || lowerLimit > 10000000);
+
+    do {
+        cout << "Enter upper bound (must be greater than or equal to lower bound): ";
+        cin >> upperLimit;
+
+        if (upperLimit < lowerLimit) {
+            cout << "Error: Please enter a number greater than or equal to lower bound.\n";
+        }
+        else if (upperLimit > 10000000) {
+            cout << "Error: Please enter a number less than or equal to 10000000.\n";
+        }
+
+    } while (upperLimit < 2 || upperLimit > 10000000);
+
+    int range[2] = { lowerLimit, upperLimit}; // example range
     send(clientSocket, reinterpret_cast<char*>(range), sizeof(range), 0);
 
     int result;
