@@ -129,7 +129,6 @@
   <ItemGroup>
     <ClCompile Include="client.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="master.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -1,3 +1,4 @@
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <iostream>
 #include <winsock2.h>
 
@@ -69,7 +70,7 @@ int main() {
 
     } while (upperLimit < 2 || upperLimit > 10000000);
 
-    int range[2] = { lowerLimit, upperLimit}; // example range
+    int range[2] = { lowerLimit, upperLimit }; // example range
     send(clientSocket, reinterpret_cast<char*>(range), sizeof(range), 0);
 
     int result;
