@@ -24,36 +24,50 @@ bool isPowerOfTwo(int n);
 int main() {
     vector<int> primes;
     vector<thread> threads;
-    int upperLimit = LIMIT;
-    int lowerLimit = 2;
+    //int upperLimit = LIMIT;
+    //int lowerLimit = 2;
+    int limit = LIMIT;
     int threadCount = 1;
     clock_t start, end;
 
-    do {
-        cout << "Enter lower bound (must be greater than or equal to 2): ";
-        cin >> lowerLimit;
+    //do {
+    //    cout << "Enter lower bound (must be greater than or equal to 2): ";
+    //    cin >> lowerLimit;
 
-        if (lowerLimit < 2) {
+    //    if (lowerLimit < 2) {
+    //        cout << "Error: Please enter a number greater than or equal to 2.\n";
+    //    }
+    //    else if (lowerLimit > 10000000) {
+    //        cout << "Error: Please enter a number less than or equal to 10000000.\n";
+    //    }
+
+    //} while (lowerLimit < 2 || lowerLimit > 10000000);
+
+    //do {
+    //    cout << "Enter upper bound (must be greater than or equal to lower bound): ";
+    //    cin >> upperLimit;
+
+    //    if (upperLimit < lowerLimit) {
+    //        cout << "Error: Please enter a number greater than or equal to lower bound.\n";
+    //    }
+    //    else if (upperLimit > 10000000) {
+    //        cout << "Error: Please enter a number less than or equal to 10000000.\n";
+    //    }
+
+    //} while (upperLimit < 2 || upperLimit > 10000000);
+
+    do {
+        cout << "Enter upper bound (must be greater than or equal to 2): ";
+        cin >> limit;
+
+        if (limit < 2) {
             cout << "Error: Please enter a number greater than or equal to 2.\n";
         }
-        else if (lowerLimit > 10000000) {
+        else if (limit > 10000000) {
             cout << "Error: Please enter a number less than or equal to 10000000.\n";
         }
 
-    } while (lowerLimit < 2 || lowerLimit > 10000000);
-
-    do {
-        cout << "Enter upper bound (must be greater than or equal to lower bound): ";
-        cin >> upperLimit;
-
-        if (upperLimit < lowerLimit) {
-            cout << "Error: Please enter a number greater than or equal to lower bound.\n";
-        }
-        else if (upperLimit > 10000000) {
-            cout << "Error: Please enter a number less than or equal to 10000000.\n";
-        }
-
-    } while (upperLimit < 2 || upperLimit > 10000000);
+    } while (limit < 2 || limit > 10000000);
 
     do {
         cout << "Enter number of threads (must be a power of 2): ";
