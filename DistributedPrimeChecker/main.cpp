@@ -10,8 +10,9 @@ mutex mtx;
 
 #pragma comment(lib, "ws2_32.lib")
 
+#define LIMIT 10000000
+
 bool check_prime(int n) {
-    if (n <= 1) return false;
     for (int i = 2; i * i <= n; i++) {
         if (n % i == 0) return false;
     }
@@ -19,31 +20,33 @@ bool check_prime(int n) {
 }
 
 void thread_func(int lowerLimit, int upperLimit, vector<int>* primes) {
+    cout << "Thread processing range: " << lowerLimit << " to " << upperLimit << endl;
     for (int current_num = lowerLimit; current_num <= upperLimit; current_num++) {
         if (check_prime(current_num)) {
-            lock_guard<mutex> lock(mtx); // Use lock_guard for exception-safe locking
+            lock_guard<mutex> lock(mtx); // Synchronize access to primes
             primes->push_back(current_num);
+            cout << "Found prime: " << current_num << endl; // Debug print
         }
     }
 }
 
-void processClient(SOCKET clientSocket) {
-    int range[2];
-    recv(clientSocket, reinterpret_cast<char*>(range), sizeof(range), 0);
+
+void processClient(int upperLimit, int lowerLimit) {
+    //SOCKET clientSocket
+    //int range[2];
+    //recv(clientSocket, reinterpret_cast<char*>(range), sizeof(range), 0);
 
     vector<int> primes;
     int threadCount = thread::hardware_concurrency(); // Use hardware concurrency for thread count
     vector<thread> threads;
     threads.reserve(threadCount);
 
-    int lowerLimit = range[0];
-    int upperLimit = range[1];
     int rangeLength = upperLimit - lowerLimit + 1;
-    int split = rangeLength / threadCount + (rangeLength % threadCount != 0); // Ensure even distribution
+    int split = max(1, rangeLength / threadCount); // Ensure split is at least 1
 
-    for (int i = 0; i < threadCount; ++i) {
+    for (int i = 0; i < threadCount && lowerLimit + i * split <= upperLimit; ++i) {
         int start = lowerLimit + i * split;
-        int end = i == threadCount - 1 ? upperLimit : start + split - 1;
+        int end = min(upperLimit, start + split - 1);
         threads.emplace_back(thread(thread_func, start, end, &primes));
     }
 
@@ -52,12 +55,19 @@ void processClient(SOCKET clientSocket) {
     }
 
     int primesCount = primes.size();
-    send(clientSocket, reinterpret_cast<char*>(&primesCount), sizeof(primesCount), 0);
 
-    closesocket(clientSocket);
+    cout << "Number of primes: " << primesCount << '\n';
+
+    //send(clientSocket, reinterpret_cast<char*>(&primesCount), sizeof(primesCount), 0);
+
+    //closesocket(clientSocket);
 }
 
 int main() {
+
+    int upperLimit = LIMIT;
+    int lowerLimit = 2;
+
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         cerr << "Winsock init failed.\n";
@@ -73,17 +83,45 @@ int main() {
     bind(serverSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));
     listen(serverSocket, 5);
 
-    cout << "Master server waiting for connections...\n";
+    // cout << "Master server waiting for connections...\n";
 
-    while (true) {
-        SOCKET clientSocket = accept(serverSocket, NULL, NULL);
-        if (clientSocket == INVALID_SOCKET) {
-            cerr << "Accept failed with error: " << WSAGetLastError() << '\n';
-            continue;
+    do {
+        cout << "Enter lower bound (must be greater than or equal to 2): ";
+        cin >> lowerLimit;
+
+        if (lowerLimit < 2) {
+            cout << "Error: Please enter a number greater than or equal to 2.\n";
         }
-        cout << "Master server waiting for connections...\n";
-        thread clientThread(processClient, clientSocket);
-    }
+        else if (lowerLimit > 10000000) {
+            cout << "Error: Please enter a number less than or equal to 10000000.\n";
+        }
+
+    } while (lowerLimit < 2 || lowerLimit > 10000000);
+
+    do {
+        cout << "Enter upper bound (must be greater than or equal to lower bound): ";
+        cin >> upperLimit;
+
+        if (upperLimit < lowerLimit) {
+            cout << "Error: Please enter a number greater than or equal to lower bound.\n";
+        }
+        else if (upperLimit > 10000000) {
+            cout << "Error: Please enter a number less than or equal to 10000000.\n";
+        }
+
+    } while (upperLimit < 2 || upperLimit > 10000000);
+
+    processClient(upperLimit, lowerLimit);
+
+    //while (true) {
+    //    SOCKET clientSocket = accept(serverSocket, NULL, NULL);
+    //    if (clientSocket == INVALID_SOCKET) {
+    //        cerr << "Accept failed with error: " << WSAGetLastError() << '\n';
+    //        continue;
+    //    }
+    //    cout << "Master server waiting for connections...\n";
+    //    thread clientThread(processClient, clientSocket);
+    //}
 
     WSACleanup();
     return 0;
