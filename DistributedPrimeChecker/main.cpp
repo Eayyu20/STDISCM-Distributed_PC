@@ -69,6 +69,8 @@ int main() {
 
     threads.reserve(threadCount);
 
+    // need to fix this with UPPERLIMIT & LOWERLIMIT
+
     int split = limit / threadCount;
 
     for (int i = 2; i <= limit; i = i + split + 1) {
