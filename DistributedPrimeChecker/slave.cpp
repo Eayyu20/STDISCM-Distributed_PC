@@ -74,7 +74,7 @@ int main() {
 
     slaveAddr.sin_family = AF_INET;
     slaveAddr.sin_addr.s_addr = INADDR_ANY;
-    slaveAddr.sin_port = htons(12346);  // Use a different port than the master/client
+    slaveAddr.sin_port = htons(8080);  // Use a different port than the master/client
 
     if (bind(slaveSocket, (struct sockaddr*)&slaveAddr, sizeof(slaveAddr)) == SOCKET_ERROR) {
         cerr << "Bind failed with error code : " << WSAGetLastError() << endl;
@@ -95,6 +95,9 @@ int main() {
     cout << "Connection accepted" << endl;
     int range[2];
     recv(masterSocket, reinterpret_cast<char*>(range), sizeof(range), 0);
+
+    // Print the range received from the master
+    cout << "Received range: " << range[0] << " to " << range[1] << endl;
 
     // Sending back the count of primes found
     int primesCount = processMaster(range[0], range[1]);
