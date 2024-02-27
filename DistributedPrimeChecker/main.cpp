@@ -1,3 +1,4 @@
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <iostream>
 #include <vector>
 #include <thread>
@@ -30,11 +31,7 @@ void thread_func(int lowerLimit, int upperLimit, vector<int>* primes) {
     }
 }
 
-
-void processClient(int upperLimit, int lowerLimit) {
-    //SOCKET clientSocket
-    //int range[2];
-    //recv(clientSocket, reinterpret_cast<char*>(range), sizeof(range), 0);
+int processClient(int upperLimit, int lowerLimit) {
 
     vector<int> primes;
     int threadCount = thread::hardware_concurrency(); // Use hardware concurrency for thread count
@@ -58,9 +55,7 @@ void processClient(int upperLimit, int lowerLimit) {
 
     cout << "Number of primes: " << primesCount << '\n';
 
-    //send(clientSocket, reinterpret_cast<char*>(&primesCount), sizeof(primesCount), 0);
-
-    //closesocket(clientSocket);
+    return primesCount;
 }
 
 int main() {
@@ -69,21 +64,36 @@ int main() {
     int lowerLimit = 2;
 
     WSADATA wsaData;
+    SOCKET clientSocket;
+    sockaddr_in serverAddr;
+
+    // Initialize Winsock
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        cerr << "Winsock init failed.\n";
+        cerr << "WSAStartup failed.\n";
         return 1;
     }
 
-    SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
-    sockaddr_in serverAddr;
+    // Create socket
+    clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (clientSocket == INVALID_SOCKET) {
+        cerr << "Could not create socket : " << WSAGetLastError() << endl;
+        WSACleanup();
+        return 1;
+    }
+
     serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(12345);
-    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(8080);
+    serverAddr.sin_addr.s_addr = inet_addr("10.52.1.1");
 
-    bind(serverSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));
-    listen(serverSocket, 5);
+    // Connect to server
+    if (connect(clientSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        cerr << "Connect failed with error: " << WSAGetLastError() << endl;
+        closesocket(clientSocket);
+        WSACleanup();
+        return 1;
+    }
 
-    // cout << "Master server waiting for connections...\n";
+    cout << "Connected to server." << endl;
 
     do {
         cout << "Enter lower bound (must be greater than or equal to 2): ";
@@ -111,17 +121,37 @@ int main() {
 
     } while (upperLimit < 2 || upperLimit > 10000000);
 
-    processClient(upperLimit, lowerLimit);
+    // Determine the midpoint of the range
+    int midPoint = (upperLimit + lowerLimit) / 2;
 
-    //while (true) {
-    //    SOCKET clientSocket = accept(serverSocket, NULL, NULL);
-    //    if (clientSocket == INVALID_SOCKET) {
-    //        cerr << "Accept failed with error: " << WSAGetLastError() << '\n';
-    //        continue;
-    //    }
-    //    cout << "Master server waiting for connections...\n";
-    //    thread clientThread(processClient, clientSocket);
-    //}
+    // Send the second half of the range to the slave for processing
+    int range[2] = { midPoint + 1, upperLimit };
+    if (send(clientSocket, reinterpret_cast<char*>(range), sizeof(range), 0) < 0) {
+        cerr << "Failed to send range to slave: " << WSAGetLastError() << endl;
+        closesocket(clientSocket);
+        WSACleanup();
+        return 1; // Make sure to return if sending fails
+    }
+
+    // Print the range sent to the slave
+    cout << "Sent range to slave: " << range[0] << " to " << range[1] << endl;
+
+    // Process the first half locally
+    cout << "Processing range locally: " << lowerLimit << " to " << midPoint << endl;
+    int localPrimes = processClient(lowerLimit, midPoint); // Assume this function now returns the count of primes
+
+    // Wait for and receive the result from the slave
+    int slavePrimes;
+    if (recv(clientSocket, reinterpret_cast<char*>(&slavePrimes), sizeof(slavePrimes), 0) <= 0) {
+        cerr << "Failed to receive results from slave: " << WSAGetLastError() << endl;
+    }
+    else {
+        cout << "Slave found " << slavePrimes << " prime numbers in the range " << range[0] << " to " << range[1] << endl;
+    }
+
+    // Combine the results
+    int totalPrimes = localPrimes + slavePrimes;
+    cout << "Total number of primes found: " << totalPrimes << endl;
 
     WSACleanup();
     return 0;
