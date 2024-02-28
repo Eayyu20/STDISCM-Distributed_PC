@@ -9,14 +9,15 @@ using namespace std;
 mutex mtx;
 #define LIMIT 10000000
 #pragma comment(lib, "ws2_32.lib")
+
 bool check_prime(const int& n) {
-     for (int i = 2; i * i <= n; i++) {
+        for (int i = 2; i * i <= n; i++) {
          if (n % i == 0) {
              return false;
          }
      }
      return true;
- }
+}
 
 bool isPowerOfTwo(int n) {
      if (n <= 0 || n > 1025) {
@@ -26,7 +27,7 @@ bool isPowerOfTwo(int n) {
          return true;
      }
      return (n & (n - 1)) == 0;
- }
+}
 
 void thread_func(int lowerLimit, int upperLimit, vector<int>* primes) {
     for (int current_num = lowerLimit; current_num <= upperLimit; current_num++) {
@@ -143,15 +144,13 @@ int main() {
     //start timer
     start = clock();
 
-    int split = limit / threadCount;
+    int rangeLength = midPoint - lowerLimit + 1;
+    int split = max(1, rangeLength / threadCount); // Ensure split is at least 1
 
-    for (int i = lowerLimit; i <= midPoint; i = i + split + 1) {
-        if (i + split > limit) {
-            threads.emplace_back(thread(thread_func, i, limit, &primes));
-        }
-        else {
-            threads.emplace_back(thread(thread_func, i, i + split, &primes));
-        }
+    for (int i = 0; i < threadCount && lowerLimit + i * split <= upperLimit; ++i) {
+        int start = lowerLimit + i * split;
+        int end = min(upperLimit, start + split - 1);
+        threads.emplace_back(thread(thread_func, start, end, &primes));
     }
 
     for (auto& thread : threads) {
@@ -159,6 +158,18 @@ int main() {
     }
 
     //Receive data from slave
+    int primeCountFromSlave = 0;
+    int recvSize = recv(clientSocket, (char*)&primeCountFromSlave, sizeof(primeCountFromSlave), 0);
+    if (recvSize > 0) {
+        cout << "Received prime count from slave: " << primeCountFromSlave << endl;
+    }
+    else if (recvSize == 0) {
+        cout << "Connection closed." << endl;
+    }
+    else {
+        cerr << "recv failed with error: " << WSAGetLastError() << endl;
+    }
+
     // stop timer
     end = clock();
 
@@ -167,7 +178,10 @@ int main() {
     cout << "Time taken by program is : " << fixed
         << time_taken << setprecision(5);
     cout << " sec " << endl;
-     
+
+    //Output
+    std::cout << primes.size() + primeCountFromSlave << " primes were found." << std::endl;
+
     // Close sockets
     closesocket(clientSocket);
     closesocket(serverSocket);
