@@ -143,15 +143,13 @@ int main() {
     //start timer
     start = clock();
 
-    int split = limit / threadCount;
+    int rangeLength = midPoint - lowerLimit + 1;
+    int split = max(1, rangeLength / threadCount); // Ensure split is at least 1
 
-    for (int i = lowerLimit; i <= midPoint; i = i + split + 1) {
-        if (i + split > limit) {
-            threads.emplace_back(thread(thread_func, i, limit, &primes));
-        }
-        else {
-            threads.emplace_back(thread(thread_func, i, i + split, &primes));
-        }
+    for (int i = 0; i < threadCount && lowerLimit + i * split <= upperLimit; ++i) {
+        int start = lowerLimit + i * split;
+        int end = min(upperLimit, start + split - 1);
+        threads.emplace_back(thread(thread_func, start, end, &primes));
     }
 
     for (auto& thread : threads) {
@@ -159,6 +157,8 @@ int main() {
     }
 
     //Receive data from slave
+    
+
     // stop timer
     end = clock();
 
