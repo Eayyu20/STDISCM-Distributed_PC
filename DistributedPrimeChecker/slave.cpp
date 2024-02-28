@@ -27,7 +27,7 @@ void thread_func(int lowerLimit, int upperLimit, vector<int>* primes) {
     }
 }
 
-int processRange(int lowerLimit, int upperLimit, int threadCount) {
+vector<int> processRange(int lowerLimit, int upperLimit, int threadCount) {
     vector<int> primes;
     vector<thread> threads;
 
@@ -46,7 +46,7 @@ int processRange(int lowerLimit, int upperLimit, int threadCount) {
         thread.join();
     }
 
-    return primes.size();
+    return primes;
 }
 
 int main() {
@@ -68,7 +68,7 @@ int main() {
     // Connect to the server
     sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
-    serverAddr.sin_addr.s_addr = inet_addr("172.20.10.3"); // Change to the server's IP address
+    serverAddr.sin_addr.s_addr = inet_addr("172.20.10.8"); // Change to the server's IP address
     serverAddr.sin_port = htons(12345);
 
     if (connect(clientSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR) {
@@ -86,13 +86,23 @@ int main() {
         std::cout << "Received numbers: " << receivedNumbers[0] << ", " << receivedNumbers[1] << ", " << receivedNumbers[2] << std::endl;
     }
 
-    int primeCount = processRange(receivedNumbers[0], receivedNumbers[1], receivedNumbers[2]);
+    vector<int> primes = processRange(receivedNumbers[0], receivedNumbers[1], receivedNumbers[2]);
 
-    // Print prime count
-    cout << "Number of primes: " << primeCount << '\n';
+    const size_t batchSize = 10; // Example batch size
+    size_t totalBatches = (primes.size() + batchSize - 1) / batchSize; // Calculate the total number of batches
 
-    // Send prime count to the server
-    send(clientSocket, (char*)&primeCount, sizeof(primeCount), 0);
+    // Send total batches count first
+    send(clientSocket, (char*)&totalBatches, sizeof(totalBatches), 0);
+
+    for (size_t i = 0; i < primes.size(); i += batchSize) {
+        size_t currentBatchSize = min(batchSize, primes.size() - i);
+
+        // Send current batch size
+        send(clientSocket, (char*)&currentBatchSize, sizeof(currentBatchSize), 0);
+
+        // Send the batch of primes
+        send(clientSocket, (char*)&primes[i], sizeof(int) * currentBatchSize, 0);
+    }
 
     // Close socket
     closesocket(clientSocket);
