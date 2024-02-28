@@ -3,6 +3,17 @@
 #include <iostream>
 #include <winsock2.h>
 #include <cstring>
+#include <stdio.h> 
+#include <netdb.h> 
+#include <netinet/in.h> 
+#include <stdlib.h> 
+#include <string.h> 
+#include <sys/socket.h> 
+#include <sys/types.h> 
+#include <unistd.h> // read(), write(), close()
+#define MAX 80 
+#define PORT 8080 
+#define SA struct sockaddr 
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -17,33 +28,23 @@ int main() {
     std::cout << "Enter end point: ";
     std::cin >> end;
 
-    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-        std::cerr << "WSAStartup failed with error: " << WSAGetLastError() << std::endl;
-        return 1; // Return with error code
+    int sockfd, connfd, len;
+    struct sockaddr_in servaddr, cli;
+
+    // socket create and verification 
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1) {
+        printf("socket creation failed...\n");
+        exit(0);
     }
+    else
+        printf("Socket successfully created..\n");
+    bzero(&servaddr, sizeof(servaddr));
 
-    masterSocket = socket(AF_INET, SOCK_STREAM, 0);
+    // assign IP, PORT 
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    servaddr.sin_port = htons(PORT);
 
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = inet_addr("127.0.0.1"); // Localhost
-    server.sin_port = htons(8080); // Connecting to slave server port
-
-    if (connect(masterSocket, (struct sockaddr*)&server, sizeof(server)) < 0) {
-        std::cerr << "Connect failed." << std::endl;
-        closesocket(masterSocket);
-        WSACleanup();
-        return 1;
-    }
-
-    int range[2] = { start, end };
-    send(masterSocket, (char*)&range, sizeof(range), 0); // Send task
-
-    // Receive result
-    int sum;
-    recv(masterSocket, (char*)&sum, sizeof(sum), 0);
-    std::cout << "Sum from " << start << " to " << end << " = " << sum << std::endl;
-
-    closesocket(masterSocket);
-    WSACleanup();
     return 0;
 }
