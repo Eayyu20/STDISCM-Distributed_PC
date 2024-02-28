@@ -88,21 +88,17 @@ int main() {
 
     vector<int> primes = processRange(receivedNumbers[0], receivedNumbers[1], receivedNumbers[2]);
 
-    const size_t batchSize = 10; // Example batch size
-    size_t totalBatches = (primes.size() + batchSize - 1) / batchSize; // Calculate the total number of batches
+    // print primes
+    for (int i = 0; i < primes.size(); i++) {
+		cout << primes[i] << " ";
+	}
 
-    // Send total batches count first
-    send(clientSocket, (char*)&totalBatches, sizeof(totalBatches), 0);
+    // Send first the size of primes
+    size_t primesCount = primes.size();
+    send(clientSocket, (char*)&primesCount, sizeof(primesCount), 0);
 
-    for (size_t i = 0; i < primes.size(); i += batchSize) {
-        size_t currentBatchSize = min(batchSize, primes.size() - i);
-
-        // Send current batch size
-        send(clientSocket, (char*)&currentBatchSize, sizeof(currentBatchSize), 0);
-
-        // Send the batch of primes
-        send(clientSocket, (char*)&primes[i], sizeof(int) * currentBatchSize, 0);
-    }
+    // Send the primes to the server
+    send(clientSocket, (char*)primes.data(), primes.size() * sizeof(int), 0);
 
     // Close socket
     closesocket(clientSocket);
