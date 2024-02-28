@@ -158,52 +158,40 @@ int main() {
     }
 
     //Receive data from slave
-    // Receive array of integers
-    std::vector<int> receivedArray;
-    int arraySize;
+    //Prepare to receive data from the slave
+    int expectedSize;
+    int receivedSize = recv(clientSocket, (char*)&expectedSize, sizeof(expectedSize), 0);
+    if (receivedSize <= 0) {
+        cerr << "Failed to receive the size of the primes array. Error: " << WSAGetLastError() << endl;
+        // Handle error appropriately
+    }
 
-    // Receive the size of the array
-    int recvSize = recv(clientSocket, (char*)&arraySize, sizeof(arraySize), 0);
+    vector<int> receivedPrimes(expectedSize, 0);
 
-    if (recvSize > 0) {
-        // Resize the vector to accommodate the received array
-        receivedArray.resize(arraySize);
+    // Receive the array in chunks
+    int totalReceived = 0;
+    while (totalReceived < expectedSize * sizeof(int)) {
+        char* buffer = reinterpret_cast<char*>(receivedPrimes.data()) + totalReceived;
+        int leftToReceive = expectedSize * sizeof(int) - totalReceived;
+        receivedSize = recv(clientSocket, buffer, leftToReceive, 0);
 
-        // Receive the actual array data
-        recvSize = recv(clientSocket, (char*)receivedArray.data(), sizeof(int) * arraySize, 0);
-
-        if (recvSize > 0) {
-            // Process the received array as needed
-            std::cout << "Received array from slave: ";
-            for (int value : receivedArray) {
-                std::cout << value << " ";
-            }
-            std::cout << std::endl;
+        if (receivedSize > 0) {
+            totalReceived += receivedSize;
+        }
+        else if (receivedSize == 0) {
+            cout << "Connection closed by peer." << endl;
+            break; // Connection closed
         }
         else {
-            std::cerr << "recv failed with error: " << WSAGetLastError() << std::endl;
+            cerr << "recv failed with error: " << WSAGetLastError() << endl;
+            break; // Actual error
         }
     }
-    else if (recvSize == 0) {
-        std::cout << "Connection closed." << std::endl;
-    }
-    else {
-        std::cerr << "recv failed with error: " << WSAGetLastError() << std::endl;
-    }
 
-
-    /*int primeCountFromSlave = 0;
-    int recvSize = recv(clientSocket, (char*)&primeCountFromSlave, sizeof(primeCountFromSlave), 0);
-    if (recvSize > 0) {
-        cout << "Received prime count from slave: " << primeCountFromSlave << endl;
+    for (int prime : receivedPrimes) {
+        cout << prime << " ";
     }
-    else if (recvSize == 0) {
-        cout << "Connection closed." << endl;
-    }
-    else {
-        cerr << "recv failed with error: " << WSAGetLastError() << endl;
-    }*/
-
+   
     // stop timer
     end = clock();
 
