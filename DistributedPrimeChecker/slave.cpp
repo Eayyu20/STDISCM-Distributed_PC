@@ -1,47 +1,52 @@
 #include <iostream>
 #include <winsock2.h>
-#include <cstring>
 
 #pragma comment(lib, "ws2_32.lib")
 
-void processTask(SOCKET sock);
-
 int main() {
-    WSADATA wsa;
-    SOCKET slaveSocket, newSocket;
-    struct sockaddr_in server, client;
-    int c = sizeof(struct sockaddr_in);
-
-    WSAStartup(MAKEWORD(2, 2), &wsa);
-    slaveSocket = socket(AF_INET, SOCK_STREAM, 0);
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(8080); // Different port for slave server
-
-    bind(slaveSocket, (struct sockaddr*)&server, sizeof(server));
-    listen(slaveSocket, 3);
-
-    std::cout << "Slave Server waiting for tasks..." << std::endl;
-    while ((newSocket = accept(slaveSocket, (struct sockaddr*)&client, &c)) != INVALID_SOCKET) {
-        processTask(newSocket);
+    // Initialize Winsock
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        std::cerr << "WSAStartup failed." << std::endl;
+        return 1;
     }
 
-    closesocket(slaveSocket);
+    // Create socket
+    SOCKET clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (clientSocket == INVALID_SOCKET) {
+        std::cerr << "Socket creation failed." << std::endl;
+        WSACleanup();
+        return 1;
+    }
+
+    // Connect to the server
+    sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = inet_addr("103.231.240.86"); // Change to the server's IP address
+    serverAddr.sin_port = htons(12345);
+
+    if (connect(clientSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR) {
+        std::cerr << "Connection failed." << std::endl;
+        closesocket(clientSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    std::cout << "Connected to server." << std::endl;
+
+    // Receive data from the server
+    char buffer[1024];
+    int bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0);
+    if (bytesRead > 0) {
+        buffer[bytesRead] = '\0'; // Null-terminate the received data
+        std::cout << "Received message: " << buffer << std::endl;
+    }
+
+    // Close socket
+    closesocket(clientSocket);
+
+    // Cleanup Winsock
     WSACleanup();
+
     return 0;
-}
-
-void processTask(SOCKET sock) {
-    int range[2]; // To store start and end points
-    recv(sock, (char*)&range, sizeof(range), 0); // Receive task
-
-    // Compute sum of numbers in range
-    int start = range[0], end = range[1], sum = 0;
-    for (int i = start; i <= end; ++i) {
-        sum += i;
-    }
-
-    // Send result back
-    send(sock, (char*)&sum, sizeof(sum), 0);
-    std::cout << "Task completed, result sent back." << std::endl;
 }

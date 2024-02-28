@@ -1,50 +1,68 @@
-#define _WINSOCK_DEPRECATED_NO_WARNINGS
-
 #include <iostream>
 #include <winsock2.h>
-#include <cstring>
-#include <stdio.h> 
-#include <netdb.h> 
-#include <netinet/in.h> 
-#include <stdlib.h> 
-#include <string.h> 
-#include <sys/socket.h> 
-#include <sys/types.h> 
-#include <unistd.h> // read(), write(), close()
-#define MAX 80 
-#define PORT 8080 
-#define SA struct sockaddr 
 
 #pragma comment(lib, "ws2_32.lib")
 
 int main() {
-    WSADATA wsa;
-    SOCKET masterSocket;
-    struct sockaddr_in server;
-    int start, end;
-
-    std::cout << "Enter start point: ";
-    std::cin >> start;
-    std::cout << "Enter end point: ";
-    std::cin >> end;
-
-    int sockfd, connfd, len;
-    struct sockaddr_in servaddr, cli;
-
-    // socket create and verification 
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd == -1) {
-        printf("socket creation failed...\n");
-        exit(0);
+    // Initialize Winsock
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        std::cerr << "WSAStartup failed." << std::endl;
+        return 1;
     }
-    else
-        printf("Socket successfully created..\n");
-    bzero(&servaddr, sizeof(servaddr));
 
-    // assign IP, PORT 
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    servaddr.sin_port = htons(PORT);
+    // Create socket
+    SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket == INVALID_SOCKET) {
+        std::cerr << "Socket creation failed." << std::endl;
+        WSACleanup();
+        return 1;
+    }
+
+    // Bind the socket
+    sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(12345);
+
+    if (bind(serverSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR) {
+        std::cerr << "Bind failed." << std::endl;
+        closesocket(serverSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    // Listen for incoming connections
+    if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR) {
+        std::cerr << "Listen failed." << std::endl;
+        closesocket(serverSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    std::cout << "Waiting for a connection..." << std::endl;
+
+    // Accept a client connection
+    SOCKET clientSocket = accept(serverSocket, nullptr, nullptr);
+    if (clientSocket == INVALID_SOCKET) {
+        std::cerr << "Accept failed." << std::endl;
+        closesocket(serverSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    std::cout << "Connection established." << std::endl;
+
+    // Send data to the client
+    const char* message = "Hello from server!";
+    send(clientSocket, message, strlen(message), 0);
+
+    // Close sockets
+    closesocket(clientSocket);
+    closesocket(serverSocket);
+
+    // Cleanup Winsock
+    WSACleanup();
 
     return 0;
 }
