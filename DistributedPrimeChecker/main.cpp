@@ -29,14 +29,11 @@ bool isPowerOfTwo(int n) {
      return (n & (n - 1)) == 0;
 }
 
-void thread_func(int lowerLimit, int upperLimit, vector<int>* primes) {
-    for (int current_num = lowerLimit; current_num <= upperLimit; current_num++) {
-        if (check_prime(current_num)) {
-            //insert mutex here
-            mtx.lock();
-            primes->push_back(current_num);
-            //release lock
-            mtx.unlock();
+void thread_func(const vector<int>& numbers, size_t startIdx, size_t endIdx, vector<int>& primes) {
+    for (size_t i = startIdx; i <= endIdx; i++) {
+        if (check_prime(numbers[i])) {
+            lock_guard<mutex> lock(mtx);
+            primes.push_back(numbers[i]);
         }
     }
 }
@@ -68,9 +65,6 @@ void sendSerializedPrimes(SOCKET clientSocket, const vector<int>& primes) {
         if (bytesSent == SOCKET_ERROR) {
             cerr << "Failed to send prime data: " << WSAGetLastError() << endl;
             return;
-        }
-        else {
-            cout << "Sent " << bytesSent << " bytes." << endl;
         }
         totalBytesSent += bytesSent;
     }
@@ -143,7 +137,6 @@ int main() {
     }
 
     //Input Handling
-    vector<int> rangetoCheck;
     vector<int> primes;
     vector<int> masterPrimes;
     vector<int> slavePrimes;
@@ -188,23 +181,18 @@ int main() {
         }
     } while (!isPowerOfTwo(threadCount));
 
-    //Remove even numbers from the range
+    bool turn = true;
+    //Remove even numbers from the range and sort them into masterPrimes and slavePrimes
     for (int i = lowerLimit; i <= upperLimit; i++) {
         if (i % 2 != 0) {
-			rangetoCheck.push_back(i);
+            if (turn) {
+                masterPrimes.push_back(i);
+            }
+            else {
+                slavePrimes.push_back(i);
+            }
+            turn = !turn;
 		}
-	}
-
-    bool turn = true;
-    //Every other element, push to masterPrimes or slavePrimes
-    for (int i = 0; i < rangetoCheck.size(); i++) {
-        if (turn) {
-			masterPrimes.push_back(rangetoCheck[i]);
-		}
-        else {
-			slavePrimes.push_back(rangetoCheck[i]);
-		}
-        turn = !turn;
 	}
 
     // Listen for incoming connections
@@ -228,16 +216,6 @@ int main() {
 
     std::cout << "Connection established." << std::endl;
     
-    //lowerLimit for Slave
-    int midPoint = (upperLimit + lowerLimit) / 2; //change 2 with number of slaveprocess + 1
-
-    //Print masterPrimes
-    for (int i = 0; i < masterPrimes.size(); i++) {
-        cout << masterPrimes[i] << " ";
-    }
-
-    cout << std::endl <<"slavePrimes" << std::endl;
-
     //Append threadCount to slave
     slavePrimes.push_back(threadCount);
     //Send data to slave
@@ -246,13 +224,14 @@ int main() {
     //start timer
     start = clock();
 
-    int rangeLength = midPoint - lowerLimit + 1;
-    int split = max(1, rangeLength / threadCount); // Ensure split is at least 1
+    threads.reserve(threadCount);
+    size_t totalNumbers = masterPrimes.size();
+    size_t numbersPerThread = totalNumbers / threadCount;
 
-    for (int i = 0; i < threadCount && lowerLimit + i * split <= upperLimit; ++i) {
-        int start = lowerLimit + i * split;
-        int end = min(upperLimit, start + split - 1);
-        threads.emplace_back(thread(thread_func, start, end, &masterPrimes));
+    for (int i = 0; i < threadCount; ++i) {
+        size_t startIdx = i * numbersPerThread;
+        size_t endIdx = (i == threadCount - 1) ? totalNumbers - 1 : startIdx + numbersPerThread - 1;
+        threads.emplace_back(thread_func, std::cref(masterPrimes), startIdx, endIdx, std::ref(primes));
     }
 
     for (auto& thread : threads) {
@@ -262,16 +241,14 @@ int main() {
     // Receive and deserialize the primes from the server
     std::vector<int> receivedPrimes = receiveSerializedPrimes(clientSocket);
 
+    //Remove first element from receivedPrimes -> 0
+    receivedPrimes.erase(receivedPrimes.begin());
+
     //print size of primes
     cout << "Primes received Count: " << receivedPrimes.size() << endl;
 
-    //print primes
-    for (int prime : receivedPrimes) {
-            cout << prime << " " << endl;
-    }
-
     //Merge the primes 
-    //primes.insert(primes.end(), receivedPrimes.begin(), receivedPrimes.end());
+    primes.insert(primes.end(), receivedPrimes.begin(), receivedPrimes.end());
  
     //Print prime size
     cout << "Primes Count: " << primes.size() << endl;
