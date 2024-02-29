@@ -41,6 +41,41 @@ void thread_func(int lowerLimit, int upperLimit, vector<int>* primes) {
     }
 }
 
+// Serialization function
+void sendSerializedPrimes(SOCKET clientSocket, const vector<int>& primes) {
+    size_t primesCount = primes.size();
+    size_t bufferSize = sizeof(int) * primesCount;
+    vector<char> buffer(bufferSize); // Create a buffer for the serialized data
+
+    // Serialize the primes into the buffer
+    for (size_t i = 0; i < primesCount; ++i) {
+        int primeNetworkOrder = htonl(primes[i]);
+        memcpy(&buffer[i * sizeof(int)], &primeNetworkOrder, sizeof(int));
+    }
+
+    // Send the size of the primes array first
+    size_t primesCountNetwork = htonl(primesCount);
+    int bytesSent = send(clientSocket, (char*)&primesCountNetwork, sizeof(primesCountNetwork), 0);
+    if (bytesSent == SOCKET_ERROR) {
+        cerr << "Failed to send primes count: " << WSAGetLastError() << endl;
+        return;
+    }
+
+    // Then, send the entire buffer
+    size_t totalBytesSent = 0;
+    while (totalBytesSent < bufferSize) {
+        bytesSent = send(clientSocket, buffer.data() + totalBytesSent, bufferSize - totalBytesSent, 0);
+        if (bytesSent == SOCKET_ERROR) {
+            cerr << "Failed to send prime data: " << WSAGetLastError() << endl;
+            return;
+        }
+        else {
+            cout << "Sent " << bytesSent << " bytes." << endl;
+        }
+        totalBytesSent += bytesSent;
+    }
+}
+
 // Deserialization function
 vector<int> receiveSerializedPrimes(SOCKET clientSocket) {
     size_t primesCountNetwork;
@@ -70,9 +105,6 @@ vector<int> receiveSerializedPrimes(SOCKET clientSocket) {
             return vector<int>(); // Return an empty vector in case of error
         }
     }
-
-    //print primes[0]
-    cout << "Primes[0]: " << primes[0] << endl;
 
     for (size_t i = 0; i < primesCount; ++i) {
         primes[i] = ntohl(primes[i]); // Convert each prime back from network byte order
@@ -112,6 +144,7 @@ int main() {
 
     //Input Handling
     vector<int> rangetoCheck;
+    vector<int> primes;
     vector<int> masterPrimes;
     vector<int> slavePrimes;
     vector<thread> threads;
@@ -155,8 +188,6 @@ int main() {
         }
     } while (!isPowerOfTwo(threadCount));
 
-    //Initialize an array based on the range of lowerlimit and UpperLimit
-
     //Remove even numbers from the range
     for (int i = lowerLimit; i <= upperLimit; i++) {
         if (i % 2 != 0) {
@@ -165,7 +196,6 @@ int main() {
 	}
 
     bool turn = true;
-
     //Every other element, push to masterPrimes or slavePrimes
     for (int i = 0; i < rangetoCheck.size(); i++) {
         if (turn) {
@@ -201,9 +231,17 @@ int main() {
     //lowerLimit for Slave
     int midPoint = (upperLimit + lowerLimit) / 2; //change 2 with number of slaveprocess + 1
 
-    // Send data to the slave
-    int Task[3] = {midPoint, upperLimit, threadCount};
-    send(clientSocket, (char*)Task, sizeof(Task), 0);
+    //Print masterPrimes
+    for (int i = 0; i < masterPrimes.size(); i++) {
+        cout << masterPrimes[i] << " ";
+    }
+
+    cout << std::endl <<"slavePrimes" << std::endl;
+
+    //Append threadCount to slave
+    slavePrimes.push_back(threadCount);
+    //Send data to slave
+    sendSerializedPrimes(clientSocket, slavePrimes);
 
     //start timer
     start = clock();
@@ -232,16 +270,11 @@ int main() {
             cout << prime << " " << endl;
     }
 
- //   //Merge the primes
- //   primes.insert(primes.end(), receivedPrimes.begin(), receivedPrimes.end());
- //   
- //   //Print the primes
- //   for (int i = 0; i < primes.size(); i++) {
-	//	cout << "Primes: " <<primes[i] << " ";
-	//}
-
- //   //Print prime size
- //   cout << "Primes Count: " << primes.size() << endl;
+    //Merge the primes 
+    //primes.insert(primes.end(), receivedPrimes.begin(), receivedPrimes.end());
+ 
+    //Print prime size
+    cout << "Primes Count: " << primes.size() << endl;
 
     // stop timer
     end = clock();
