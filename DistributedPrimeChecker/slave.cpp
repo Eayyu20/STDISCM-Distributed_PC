@@ -18,11 +18,11 @@ bool check_prime(int n) {
     return true;
 }
 
-void thread_func(int lowerLimit, int upperLimit, vector<int>* primes) {
-    for (int current_num = lowerLimit; current_num <= upperLimit; current_num++) {
-        if (check_prime(current_num)) {
-            lock_guard<mutex> lock(mtx); // Synchronize access to primes
-            primes->push_back(current_num);
+void thread_func(const vector<int>& numbers, size_t startIdx, size_t endIdx, vector<int>& primes) {
+    for (size_t i = startIdx; i <= endIdx; i++) {
+        if (check_prime(numbers[i])) {
+            lock_guard<mutex> lock(mtx);
+            primes.push_back(numbers[i]);
         }
     }
 }
@@ -46,27 +46,27 @@ vector<int> receiveArrayFromMaster(SOCKET clientSocket) {
     return dataArray;
 }
 
-vector<int> processRange(int lowerLimit, int upperLimit, int threadCount) {
+vector<int> processArray(const vector<int>& numbers, int threadCount) {
     vector<int> primes;
     vector<thread> threads;
+    size_t totalNumbers = numbers.size();
+    size_t numbersPerThread = totalNumbers / threadCount;
 
-    threads.reserve(threadCount);
-
-    int rangeLength = upperLimit - lowerLimit + 1;
-    int split = max(1, rangeLength / threadCount); // Ensure split is at least 1
-
-    for (int i = 0; i < threadCount && lowerLimit + i * split <= upperLimit; ++i) {
-        int start = lowerLimit + i * split;
-        int end = min(upperLimit, start + split - 1);
-        threads.emplace_back(thread(thread_func, start, end, &primes));
+    for (int i = 0; i < threadCount; ++i) {
+        size_t startIdx = i * numbersPerThread;
+        size_t endIdx = (i == threadCount - 1) ? totalNumbers - 1 : startIdx + numbersPerThread - 1;
+        threads.emplace_back([&numbers, startIdx, endIdx, &primes]() {
+            thread_func(numbers, startIdx, endIdx, primes);
+            });
     }
 
-    for (auto& thread : threads) {
-        thread.join();
+    for (auto& t : threads) {
+        t.join();
     }
 
     return primes;
 }
+
 
 // Serialization function
 void sendSerializedPrimes(SOCKET clientSocket, const vector<int>& primes) {
@@ -127,7 +127,7 @@ int main() {
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = inet_addr("192.168.1.37"); // Change to the server's IP address
     serverAddr.sin_port = htons(12345);
-
+        
     if (connect(clientSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR) {
         std::cerr << "Connection failed." << std::endl;
         closesocket(clientSocket);
@@ -137,21 +137,15 @@ int main() {
 
     std::cout << "Connected to server." << std::endl;
 
-    int receivedNumbers[3]; // Array to store received numbers
-    int bytesReceived = recv(clientSocket, (char*)receivedNumbers, sizeof(receivedNumbers), 0);
-    if (bytesReceived > 0) {
-        std::cout << "Received numbers: " << receivedNumbers[0] << ", " << receivedNumbers[1] << ", " << receivedNumbers[2] << std::endl;
-    }
-
-    vector<int> primes = processRange(receivedNumbers[0], receivedNumbers[1], receivedNumbers[2]);
-
+    vector<int> primes = receiveArrayFromMaster(clientSocket);
+        
     // print primes
     for (int i = 0; i < primes.size(); i++) {
 		cout << primes[i] << " ";
 	}
 
     // print prime count
-    cout << endl << "Prime count: " << primes.size() << endl;
+    cout << endl << "Number count: " << primes.size() << endl;
 
     sendSerializedPrimes(clientSocket, primes);
 
