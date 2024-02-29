@@ -18,51 +18,62 @@ bool check_prime(int n) {
     return true;
 }
 
-void thread_func(int lowerLimit, int upperLimit, vector<int>* primes) {
-    for (int current_num = lowerLimit; current_num <= upperLimit; current_num++) {
-        if (check_prime(current_num)) {
-            lock_guard<mutex> lock(mtx); // Synchronize access to primes
-            primes->push_back(current_num);
+void thread_func(const vector<int>& numbers, size_t startIdx, size_t endIdx, vector<int>& primes) {
+    for (size_t i = startIdx; i <= endIdx; i++) {
+        if (check_prime(numbers[i])) {
+            lock_guard<mutex> lock(mtx);
+            primes.push_back(numbers[i]);
         }
     }
 }
 
-vector<int> receiveArrayFromMaster(SOCKET clientSocket) {
+vector<int> receiveArrayFromMaster(SOCKET clientSocket, int& threadCount) {
     // Receive the size of the array
     size_t dataArraySizeNetwork;
     recv(clientSocket, reinterpret_cast<char*>(&dataArraySizeNetwork), sizeof(dataArraySizeNetwork), 0);
-    size_t dataArraySize = ntohl(dataArraySizeNetwork) + 1;
+    size_t dataArraySize = ntohl(dataArraySizeNetwork);
+    cout << "Expected array size: " << dataArraySize << endl;
 
     // Receive the array elements
-    vector<int> dataArray(dataArraySize);
+    vector<int> dataArray(dataArraySize - 1);
     for (size_t i = 0; i < dataArraySize; ++i) {
         int dataNetworkOrder;
-        recv(clientSocket, reinterpret_cast<char*>(&dataNetworkOrder), sizeof(dataNetworkOrder), 0);
-        // print the dataNetworkOrder
-        cout << "Data Serialized (Network Byte Order): " << dataNetworkOrder << " to " << ntohl(dataNetworkOrder) << endl;
-        dataArray[i] = ntohl(dataNetworkOrder);
+        int recvResult = recv(clientSocket, reinterpret_cast<char*>(&dataNetworkOrder), sizeof(dataNetworkOrder), 0);
+        if (recvResult == SOCKET_ERROR) {
+            cerr << "Failed to receive data: " << WSAGetLastError() << endl;
+            break;
+        }
+        if (i == dataArraySize - 1) {
+			threadCount = ntohl(dataNetworkOrder);
+		}
+        else {
+            dataArray[i] = ntohl(dataNetworkOrder);
+            cout << "Received number: " << dataArray[i] << endl;
+        }
+        
     }
-
     return dataArray;
 }
 
-vector<int> processRange(int lowerLimit, int upperLimit, int threadCount) {
+vector<int> processArray(const vector<int>& numbers, int threadCount) {
     vector<int> primes;
     vector<thread> threads;
+    size_t totalNumbers = numbers.size();
 
     threads.reserve(threadCount);
 
-    int rangeLength = upperLimit - lowerLimit + 1;
-    int split = max(1, rangeLength / threadCount); // Ensure split is at least 1
+    size_t numbersPerThread = totalNumbers / threadCount;
 
-    for (int i = 0; i < threadCount && lowerLimit + i * split <= upperLimit; ++i) {
-        int start = lowerLimit + i * split;
-        int end = min(upperLimit, start + split - 1);
-        threads.emplace_back(thread(thread_func, start, end, &primes));
+    for (int i = 0; i < threadCount; ++i) {
+        size_t startIdx = i * numbersPerThread;
+        size_t endIdx = (i == threadCount - 1) ? totalNumbers - 1 : startIdx + numbersPerThread - 1;
+        threads.emplace_back([&numbers, startIdx, endIdx, &primes]() {
+            thread_func(numbers, startIdx, endIdx, primes);
+            });
     }
 
-    for (auto& thread : threads) {
-        thread.join();
+    for (auto& t : threads) {
+        t.join();
     }
 
     return primes;
@@ -78,8 +89,6 @@ void sendSerializedPrimes(SOCKET clientSocket, const vector<int>& primes) {
     cout << "Serializing and Sending Primes:" << endl;
     for (size_t i = 0; i < primesCount; ++i) {
         int primeNetworkOrder = htonl(primes[i]);
-        // print the primeNetworkOrder
-        cout << "Prime Serialized (Network Byte Order): " << primes[i] << " to " << primeNetworkOrder << endl;
         memcpy(&buffer[i * sizeof(int)], &primeNetworkOrder, sizeof(int));
     }
 
@@ -137,21 +146,18 @@ int main() {
 
     std::cout << "Connected to server." << std::endl;
 
-    int receivedNumbers[3]; // Array to store received numbers
-    int bytesReceived = recv(clientSocket, (char*)receivedNumbers, sizeof(receivedNumbers), 0);
-    if (bytesReceived > 0) {
-        std::cout << "Received numbers: " << receivedNumbers[0] << ", " << receivedNumbers[1] << ", " << receivedNumbers[2] << std::endl;
-    }
+    int threadCount = 0;
 
-    vector<int> primes = processRange(receivedNumbers[0], receivedNumbers[1], receivedNumbers[2]);
+    vector<int> numbers = receiveArrayFromMaster(clientSocket, threadCount);
 
-    // print primes
-    for (int i = 0; i < primes.size(); i++) {
-		cout << primes[i] << " ";
-	}
+    cout << "Processing Array" << endl;
 
-    // print prime count
-    cout << endl << "Prime count: " << primes.size() << endl;
+    vector<int> primes = processArray(numbers, threadCount);
+
+    // print primes (uncomment for debugging)
+    //for (int i = 0; i < primes.size(); i++) {
+    //    cout << primes[i] << " ";
+    //}
 
     sendSerializedPrimes(clientSocket, primes);
 
