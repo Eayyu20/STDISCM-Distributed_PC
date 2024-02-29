@@ -52,15 +52,21 @@ vector<int> processRange(int lowerLimit, int upperLimit, int threadCount) {
 // Serialization function
 void sendSerializedPrimes(SOCKET clientSocket, const vector<int>& primes) {
     size_t primesCount = primes.size();
+    size_t bufferSize = sizeof(int) * primesCount;
+    vector<char> buffer(bufferSize); // Create a buffer for the serialized data
+
+    // Serialize the primes into the buffer
+    for (size_t i = 0; i < primesCount; ++i) {
+        int primeNetworkOrder = htonl(primes[i]);
+        memcpy(&buffer[i * sizeof(int)], &primeNetworkOrder, sizeof(int));
+    }
+
     // Send the size of the primes array first
     size_t primesCountNetwork = htonl(primesCount);
     send(clientSocket, (char*)&primesCountNetwork, sizeof(primesCountNetwork), 0);
 
-    // Then, send each prime number in network byte order
-    for (size_t i = 0; i < primesCount; ++i) {
-        int primeNetwork = htonl(primes[i]);
-        send(clientSocket, (char*)&primeNetwork, sizeof(primeNetwork), 0);
-    }
+    // Then, send the entire buffer
+    send(clientSocket, buffer.data(), bufferSize, 0);
 }
 
 int main() {
