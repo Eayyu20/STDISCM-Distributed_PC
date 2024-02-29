@@ -48,7 +48,6 @@ vector<int> receiveArrayFromMaster(SOCKET clientSocket, int& threadCount) {
 		}
         else {
             dataArray[i] = ntohl(dataNetworkOrder);
-            cout << "Received number: " << dataArray[i] << endl;
         }
         
     }
@@ -67,9 +66,7 @@ vector<int> processArray(const vector<int>& numbers, int threadCount) {
     for (int i = 0; i < threadCount; ++i) {
         size_t startIdx = i * numbersPerThread;
         size_t endIdx = (i == threadCount - 1) ? totalNumbers - 1 : startIdx + numbersPerThread - 1;
-        threads.emplace_back([&numbers, startIdx, endIdx, &primes]() {
-            thread_func(numbers, startIdx, endIdx, primes);
-            });
+        threads.emplace_back(thread_func, std::cref(numbers), startIdx, endIdx, std::ref(primes));
     }
 
     for (auto& t : threads) {
@@ -86,7 +83,7 @@ void sendSerializedPrimes(SOCKET clientSocket, const vector<int>& primes) {
     vector<char> buffer(bufferSize); // Create a buffer for the serialized data
 
     // Serialize the primes into the buffer
-    cout << "Serializing and Sending Primes:" << endl;
+    cout << "Serializing and Sending Primes..." << endl;
     for (size_t i = 0; i < primesCount; ++i) {
         int primeNetworkOrder = htonl(primes[i]);
         memcpy(&buffer[i * sizeof(int)], &primeNetworkOrder, sizeof(int));
@@ -109,7 +106,7 @@ void sendSerializedPrimes(SOCKET clientSocket, const vector<int>& primes) {
             return;
         }
         else {
-            cout << "Sent " << bytesSent << " bytes." << endl;
+            cout << "Sent " << bytesSent / 1024.0 << " KB." << endl;
         }
         totalBytesSent += bytesSent;
     }
@@ -150,14 +147,17 @@ int main() {
 
     vector<int> numbers = receiveArrayFromMaster(clientSocket, threadCount);
 
-    cout << "Processing Array" << endl;
+    cout << "Processing Array..." << endl;
 
     vector<int> primes = processArray(numbers, threadCount);
 
-    // print primes (uncomment for debugging)
-    //for (int i = 0; i < primes.size(); i++) {
-    //    cout << primes[i] << " ";
-    //}
+    // Print size of primes
+    cout << "Primes count: " << primes.size() << endl;
+
+    // Print primes (uncomment for debugging)
+    /*for (int i = 0; i < primes.size(); i++) {
+        cout << primes[i] << " ";
+    }*/
 
     sendSerializedPrimes(clientSocket, primes);
 
