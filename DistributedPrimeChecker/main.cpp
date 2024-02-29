@@ -41,6 +41,34 @@ void thread_func(int lowerLimit, int upperLimit, vector<int>* primes) {
     }
 }
 
+// Deserialization function
+vector<int> receiveSerializedPrimes(SOCKET clientSocket) {
+    // Receive the size of the primes array first
+    size_t primesCountNetwork;
+    recv(clientSocket, (char*)&primesCountNetwork, sizeof(primesCountNetwork), 0);
+    size_t primesCount = ntohl(primesCountNetwork);
+
+    // Receive the serialized data into a buffer
+    size_t bufferSize = sizeof(int) * primesCount;
+    vector<char> buffer(bufferSize);
+    recv(clientSocket, buffer.data(), bufferSize, 0);
+
+    // Deserialize the buffer into a vector of integers
+    vector<int> primes(primesCount);
+    for (size_t i = 0; i < primesCount; ++i) {
+        int primeNetworkOrder;
+        memcpy(&primeNetworkOrder, &buffer[i * sizeof(int)], sizeof(int));
+        primes[i] = ntohl(primeNetworkOrder);
+    }
+    
+    //print the primes
+    for (int i = 0; i < primes.size(); i++) {
+		cout << "Primes: " << primes[i] << " ";
+	}
+
+    return primes;
+}
+
 int main() {
     // Initialize Winsock
     WSADATA wsaData;
@@ -158,50 +186,54 @@ int main() {
     }
 
     //Receive data from slave
-    //Prepare to receive data from the slave
-    int expectedSize;
-    int receivedSize = recv(clientSocket, (char*)&expectedSize, sizeof(expectedSize), 0);
-    if (receivedSize <= 0) {
-        cerr << "Failed to receive the size of the primes array. Error: " << WSAGetLastError() << endl;
-        // Handle error appropriately
-    }
+    ////Prepare to receive data from the slave
+    //int expectedSize;
+    //int receivedSize = recv(clientSocket, (char*)&expectedSize, sizeof(expectedSize), 0);
+    //if (receivedSize <= 0) {
+    //    cerr << "Failed to receive the size of the primes array. Error: " << WSAGetLastError() << endl;
+    //    // Handle error appropriately
+    //}
 
-    vector<int> receivedPrimes(expectedSize, 0);
+    //vector<int> receivedPrimes(expectedSize, 0);
 
-    // Receive the array in chunks
-    int totalReceived = 0;
-    while (totalReceived < expectedSize * sizeof(int)) {
-        char* buffer = reinterpret_cast<char*>(receivedPrimes.data()) + totalReceived;
-        int leftToReceive = expectedSize * sizeof(int) - totalReceived;
-        receivedSize = recv(clientSocket, buffer, leftToReceive, 0);
+    //// Receive the array in chunks
+    //int totalReceived = 0;
+    //while (totalReceived < expectedSize * sizeof(int)) {
+    //    char* buffer = reinterpret_cast<char*>(receivedPrimes.data()) + totalReceived;
+    //    int leftToReceive = expectedSize * sizeof(int) - totalReceived;
+    //    receivedSize = recv(clientSocket, buffer, leftToReceive, 0);
 
-        if (receivedSize > 0) {
-            totalReceived += receivedSize;
-        }
-        else if (receivedSize == 0) {
-            cout << "Connection closed by peer." << endl;
-            break; // Connection closed
-        }
-        else {
-            cerr << "recv failed with error: " << WSAGetLastError() << endl;
-            break; // Actual error
-        }
-    }
+    //    if (receivedSize > 0) {
+    //        totalReceived += receivedSize;
+    //    }
+    //    else if (receivedSize == 0) {
+    //        cout << "Connection closed by peer." << endl;
+    //        break; // Connection closed
+    //    }
+    //    else {
+    //        cerr << "recv failed with error: " << WSAGetLastError() << endl;
+    //        break; // Actual error
+    //    }
+    //}
+ 
+    // Receive and deserialize the primes from the server
+    std::vector<int> receivedPrimes = receiveSerializedPrimes(clientSocket);
 
-    for (int prime : receivedPrimes) {
-        cout << "Primes from Slave: " << prime << " ";
-    }
-   
-    //Merge the primes
-    primes.insert(primes.end(), receivedPrimes.begin(), receivedPrimes.end());
-    
-    //Print the primes
-    for (int i = 0; i < primes.size(); i++) {
-		cout << "Primes: " <<primes[i] << " ";
-	}
+    ////Print the primes from slave
+    //for (int prime : receivedPrimes) {
+    //    cout << prime << " " << endl;
+    //}
 
-    //Print prime size
-    cout << "Primes Count: " << primes.size() << endl;
+ //   //Merge the primes
+ //   primes.insert(primes.end(), receivedPrimes.begin(), receivedPrimes.end());
+ //   
+ //   //Print the primes
+ //   for (int i = 0; i < primes.size(); i++) {
+	//	cout << "Primes: " <<primes[i] << " ";
+	//}
+
+ //   //Print prime size
+ //   cout << "Primes Count: " << primes.size() << endl;
 
     // stop timer
     end = clock();
