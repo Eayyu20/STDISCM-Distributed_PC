@@ -27,6 +27,25 @@ void thread_func(int lowerLimit, int upperLimit, vector<int>* primes) {
     }
 }
 
+vector<int> receiveArrayFromMaster(SOCKET clientSocket) {
+    // Receive the size of the array
+    size_t dataArraySizeNetwork;
+    recv(clientSocket, reinterpret_cast<char*>(&dataArraySizeNetwork), sizeof(dataArraySizeNetwork), 0);
+    size_t dataArraySize = ntohl(dataArraySizeNetwork) + 1;
+
+    // Receive the array elements
+    vector<int> dataArray(dataArraySize);
+    for (size_t i = 0; i < dataArraySize; ++i) {
+        int dataNetworkOrder;
+        recv(clientSocket, reinterpret_cast<char*>(&dataNetworkOrder), sizeof(dataNetworkOrder), 0);
+        // print the dataNetworkOrder
+        cout << "Data Serialized (Network Byte Order): " << dataNetworkOrder << " to " << ntohl(dataNetworkOrder) << endl;
+        dataArray[i] = ntohl(dataNetworkOrder);
+    }
+
+    return dataArray;
+}
+
 vector<int> processRange(int lowerLimit, int upperLimit, int threadCount) {
     vector<int> primes;
     vector<thread> threads;
@@ -56,17 +75,35 @@ void sendSerializedPrimes(SOCKET clientSocket, const vector<int>& primes) {
     vector<char> buffer(bufferSize); // Create a buffer for the serialized data
 
     // Serialize the primes into the buffer
+    cout << "Serializing and Sending Primes:" << endl;
     for (size_t i = 0; i < primesCount; ++i) {
         int primeNetworkOrder = htonl(primes[i]);
+        // print the primeNetworkOrder
+        cout << "Prime Serialized (Network Byte Order): " << primes[i] << " to " << primeNetworkOrder << endl;
         memcpy(&buffer[i * sizeof(int)], &primeNetworkOrder, sizeof(int));
     }
 
     // Send the size of the primes array first
     size_t primesCountNetwork = htonl(primesCount);
-    send(clientSocket, (char*)&primesCountNetwork, sizeof(primesCountNetwork), 0);
+    int bytesSent = send(clientSocket, (char*)&primesCountNetwork, sizeof(primesCountNetwork), 0);
+    if (bytesSent == SOCKET_ERROR) {
+        cerr << "Failed to send primes count: " << WSAGetLastError() << endl;
+        return;
+    }
 
     // Then, send the entire buffer
-    send(clientSocket, buffer.data(), bufferSize, 0);
+    size_t totalBytesSent = 0;
+    while (totalBytesSent < bufferSize) {
+        bytesSent = send(clientSocket, buffer.data() + totalBytesSent, bufferSize - totalBytesSent, 0);
+        if (bytesSent == SOCKET_ERROR) {
+            cerr << "Failed to send prime data: " << WSAGetLastError() << endl;
+            return;
+        }
+        else {
+            cout << "Sent " << bytesSent << " bytes." << endl;
+        }
+        totalBytesSent += bytesSent;
+    }
 }
 
 int main() {
@@ -112,6 +149,9 @@ int main() {
     for (int i = 0; i < primes.size(); i++) {
 		cout << primes[i] << " ";
 	}
+
+    // print prime count
+    cout << endl << "Prime count: " << primes.size() << endl;
 
     sendSerializedPrimes(clientSocket, primes);
 
