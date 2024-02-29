@@ -49,6 +49,20 @@ vector<int> processRange(int lowerLimit, int upperLimit, int threadCount) {
     return primes;
 }
 
+// Serialization function
+void sendSerializedPrimes(SOCKET clientSocket, const vector<int>& primes) {
+    size_t primesCount = primes.size();
+    // Send the size of the primes array first
+    size_t primesCountNetwork = htonl(primesCount);
+    send(clientSocket, (char*)&primesCountNetwork, sizeof(primesCountNetwork), 0);
+
+    // Then, send each prime number in network byte order
+    for (size_t i = 0; i < primesCount; ++i) {
+        int primeNetwork = htonl(primes[i]);
+        send(clientSocket, (char*)&primeNetwork, sizeof(primeNetwork), 0);
+    }
+}
+
 int main() {
     // Initialize Winsock
     WSADATA wsaData;
@@ -68,7 +82,7 @@ int main() {
     // Connect to the server
     sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
-    serverAddr.sin_addr.s_addr = inet_addr("172.20.10.8"); // Change to the server's IP address
+    serverAddr.sin_addr.s_addr = inet_addr("192.168.1.37"); // Change to the server's IP address
     serverAddr.sin_port = htons(12345);
 
     if (connect(clientSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR) {
@@ -93,12 +107,7 @@ int main() {
 		cout << primes[i] << " ";
 	}
 
-    // Send first the size of primes
-    size_t primesCount = primes.size();
-    send(clientSocket, (char*)&primesCount, sizeof(primesCount), 0);
-
-    // Send the primes to the server
-    send(clientSocket, (char*)primes.data(), primes.size() * sizeof(int), 0);
+    sendSerializedPrimes(clientSocket, primes);
 
     // Close socket
     closesocket(clientSocket);
