@@ -79,11 +79,11 @@ int main() {
     clock_t start, end;
 
     do {
-        cout << "Enter lower bound (must be greater than or equal to 2): ";
+        cout << "Enter lower bound (must be greater than or equal to 1): ";
         cin >> lowerLimit;
 
-        if (lowerLimit < 2) {
-            cout << "Error: Please enter a number greater than or equal to 2.\n";
+        if (lowerLimit < 1) {
+            cout << "Error: Please enter a number greater than or equal to 1.\n";
         }
         else if (lowerLimit > 10000000) {
             cout << "Error: Please enter a number less than or equal to 10000000.\n";
@@ -189,9 +189,20 @@ int main() {
     }
 
     for (int prime : receivedPrimes) {
-        cout << prime << " ";
+        cout << "Primes from Slave: " << prime << " ";
     }
    
+    //Merge the primes
+    primes.insert(primes.end(), receivedPrimes.begin(), receivedPrimes.end());
+    
+    //Print the primes
+    for (int i = 0; i < primes.size(); i++) {
+		cout << "Primes: " <<primes[i] << " ";
+	}
+
+    //Print prime size
+    cout << "Primes Count: " << primes.size() << endl;
+
     // stop timer
     end = clock();
 
