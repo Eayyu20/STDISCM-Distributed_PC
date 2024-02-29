@@ -7,7 +7,7 @@
 
 using namespace std;
 mutex mtx;
-#define LIMIT 10000000
+#define LIMIT 100000000
 #pragma comment(lib, "ws2_32.lib")
 
 bool check_prime(const int& n) {
@@ -43,28 +43,40 @@ void thread_func(int lowerLimit, int upperLimit, vector<int>* primes) {
 
 // Deserialization function
 vector<int> receiveSerializedPrimes(SOCKET clientSocket) {
-    // Receive the size of the primes array first
     size_t primesCountNetwork;
-    recv(clientSocket, (char*)&primesCountNetwork, sizeof(primesCountNetwork), 0);
-    size_t primesCount = ntohl(primesCountNetwork);
-
-    // Receive the serialized data into a buffer
-    size_t bufferSize = sizeof(int) * primesCount;
-    vector<char> buffer(bufferSize);
-    recv(clientSocket, buffer.data(), bufferSize, 0);
-
-    // Deserialize the buffer into a vector of integers
-    vector<int> primes(primesCount);
-    for (size_t i = 0; i < primesCount; ++i) {
-        int primeNetworkOrder;
-        memcpy(&primeNetworkOrder, &buffer[i * sizeof(int)], sizeof(int));
-        primes[i] = ntohl(primeNetworkOrder);
+    int bytesReceived = recv(clientSocket, reinterpret_cast<char*>(&primesCountNetwork), sizeof(primesCountNetwork), 0);
+    if (bytesReceived <= 0) {
+        cerr << "Failed to receive primes count." << endl;
+        return vector<int>(); // Return an empty vector in case of error
     }
-    
-    //print the primes
-    for (int i = 0; i < primes.size(); i++) {
-		cout << "Primes: " << primes[i] << " ";
-	}
+    size_t primesCount = ntohl(primesCountNetwork) + 1;
+
+    vector<int> primes(primesCount);
+    size_t totalBytesExpected = primesCount * sizeof(int);
+    char* primesBuffer = reinterpret_cast<char*>(primes.data());
+
+    size_t totalBytesReceived = 0;
+    while (totalBytesReceived < totalBytesExpected) {
+        bytesReceived = recv(clientSocket, primesBuffer + totalBytesReceived, totalBytesExpected - totalBytesReceived, 0);
+        if (bytesReceived > 0) {
+            totalBytesReceived += bytesReceived;
+        }
+        else if (bytesReceived == 0) {
+            cerr << "Connection closed unexpectedly." << endl;
+            break;
+        }
+        else {
+            cerr << "recv failed: " << WSAGetLastError() << endl;
+            return vector<int>(); // Return an empty vector in case of error
+        }
+    }
+
+    //print primes[0]
+    cout << "Primes[0]: " << primes[0] << endl;
+
+    for (size_t i = 0; i < primesCount; ++i) {
+        primes[i] = ntohl(primes[i]); // Convert each prime back from network byte order
+    }
 
     return primes;
 }
@@ -99,7 +111,9 @@ int main() {
     }
 
     //Input Handling
-    vector<int> primes;
+    vector<int> rangetoCheck;
+    vector<int> masterPrimes;
+    vector<int> slavePrimes;
     vector<thread> threads;
     int upperLimit = LIMIT;
     int lowerLimit = 2;
@@ -113,24 +127,24 @@ int main() {
         if (lowerLimit < 1) {
             cout << "Error: Please enter a number greater than or equal to 1.\n";
         }
-        else if (lowerLimit > 10000000) {
+        else if (lowerLimit > LIMIT) {
             cout << "Error: Please enter a number less than or equal to 10000000.\n";
         }
 
-    } while (lowerLimit < 2 || lowerLimit > 10000000);
+    } while (lowerLimit < 1 || lowerLimit > LIMIT);
 
     do {
-        cout << "Enter upper bound (must be greater than or equal to lower bound): ";
+        cout << "Enter upper bound (must be greater than the lower bound): ";
         cin >> upperLimit;
 
         if (upperLimit < lowerLimit) {
-            cout << "Error: Please enter a number greater than or equal to lower bound.\n";
+            cout << "Error: Please enter a number greater than the lower bound.\n";
         }
-        else if (upperLimit > 10000000) {
+        else if (upperLimit > LIMIT) {
             cout << "Error: Please enter a number less than or equal to 10000000.\n";
         }
 
-    } while (upperLimit < 2 || upperLimit > 10000000);
+    } while (upperLimit < 2 || upperLimit > LIMIT);
 
     do {
         cout << "Enter number of threads (must be a power of 2): ";
@@ -140,6 +154,28 @@ int main() {
             cout << "Error: Please enter a number that is a power of 2.\n";
         }
     } while (!isPowerOfTwo(threadCount));
+
+    //Initialize an array based on the range of lowerlimit and UpperLimit
+
+    //Remove even numbers from the range
+    for (int i = lowerLimit; i <= upperLimit; i++) {
+        if (i % 2 != 0) {
+			rangetoCheck.push_back(i);
+		}
+	}
+
+    bool turn = true;
+
+    //Every other element, push to masterPrimes or slavePrimes
+    for (int i = 0; i < rangetoCheck.size(); i++) {
+        if (turn) {
+			masterPrimes.push_back(rangetoCheck[i]);
+		}
+        else {
+			slavePrimes.push_back(rangetoCheck[i]);
+		}
+        turn = !turn;
+	}
 
     // Listen for incoming connections
     if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR) {
@@ -178,51 +214,23 @@ int main() {
     for (int i = 0; i < threadCount && lowerLimit + i * split <= upperLimit; ++i) {
         int start = lowerLimit + i * split;
         int end = min(upperLimit, start + split - 1);
-        threads.emplace_back(thread(thread_func, start, end, &primes));
+        threads.emplace_back(thread(thread_func, start, end, &masterPrimes));
     }
 
     for (auto& thread : threads) {
         thread.join();
     }
-
-    //Receive data from slave
-    ////Prepare to receive data from the slave
-    //int expectedSize;
-    //int receivedSize = recv(clientSocket, (char*)&expectedSize, sizeof(expectedSize), 0);
-    //if (receivedSize <= 0) {
-    //    cerr << "Failed to receive the size of the primes array. Error: " << WSAGetLastError() << endl;
-    //    // Handle error appropriately
-    //}
-
-    //vector<int> receivedPrimes(expectedSize, 0);
-
-    //// Receive the array in chunks
-    //int totalReceived = 0;
-    //while (totalReceived < expectedSize * sizeof(int)) {
-    //    char* buffer = reinterpret_cast<char*>(receivedPrimes.data()) + totalReceived;
-    //    int leftToReceive = expectedSize * sizeof(int) - totalReceived;
-    //    receivedSize = recv(clientSocket, buffer, leftToReceive, 0);
-
-    //    if (receivedSize > 0) {
-    //        totalReceived += receivedSize;
-    //    }
-    //    else if (receivedSize == 0) {
-    //        cout << "Connection closed by peer." << endl;
-    //        break; // Connection closed
-    //    }
-    //    else {
-    //        cerr << "recv failed with error: " << WSAGetLastError() << endl;
-    //        break; // Actual error
-    //    }
-    //}
  
     // Receive and deserialize the primes from the server
     std::vector<int> receivedPrimes = receiveSerializedPrimes(clientSocket);
 
-    ////Print the primes from slave
-    //for (int prime : receivedPrimes) {
-    //    cout << prime << " " << endl;
-    //}
+    //print size of primes
+    cout << "Primes received Count: " << receivedPrimes.size() << endl;
+
+    //print primes
+    for (int prime : receivedPrimes) {
+            cout << prime << " " << endl;
+    }
 
  //   //Merge the primes
  //   primes.insert(primes.end(), receivedPrimes.begin(), receivedPrimes.end());
@@ -243,9 +251,6 @@ int main() {
     cout << "Time taken by program is : " << fixed
         << time_taken << setprecision(5);
     cout << " sec " << endl;
-
-    //Output
-    //std::cout << primes.size() + primeCountFromSlave << " primes were found." << std::endl;
 
     // Close sockets
     closesocket(clientSocket);
