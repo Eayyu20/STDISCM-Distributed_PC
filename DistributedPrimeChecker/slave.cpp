@@ -27,22 +27,31 @@ void thread_func(const vector<int>& numbers, size_t startIdx, size_t endIdx, vec
     }
 }
 
-vector<int> receiveArrayFromMaster(SOCKET clientSocket) {
+vector<int> receiveArrayFromMaster(SOCKET clientSocket, int& threadCount) {
     // Receive the size of the array
     size_t dataArraySizeNetwork;
     recv(clientSocket, reinterpret_cast<char*>(&dataArraySizeNetwork), sizeof(dataArraySizeNetwork), 0);
-    size_t dataArraySize = ntohl(dataArraySizeNetwork) + 1;
+    size_t dataArraySize = ntohl(dataArraySizeNetwork);
+    cout << "Expected array size: " << dataArraySize << endl;
 
     // Receive the array elements
-    vector<int> dataArray(dataArraySize);
+    vector<int> dataArray(dataArraySize - 1);
     for (size_t i = 0; i < dataArraySize; ++i) {
         int dataNetworkOrder;
-        recv(clientSocket, reinterpret_cast<char*>(&dataNetworkOrder), sizeof(dataNetworkOrder), 0);
-        // print the dataNetworkOrder
-        cout << "Data Serialized (Network Byte Order): " << dataNetworkOrder << " to " << ntohl(dataNetworkOrder) << endl;
-        dataArray[i] = ntohl(dataNetworkOrder);
+        int recvResult = recv(clientSocket, reinterpret_cast<char*>(&dataNetworkOrder), sizeof(dataNetworkOrder), 0);
+        if (recvResult == SOCKET_ERROR) {
+            cerr << "Failed to receive data: " << WSAGetLastError() << endl;
+            break;
+        }
+        if (i == dataArraySize - 1) {
+			threadCount = ntohl(dataNetworkOrder);
+		}
+        else {
+            dataArray[i] = ntohl(dataNetworkOrder);
+            cout << "Received number: " << dataArray[i] << endl;
+        }
+        
     }
-
     return dataArray;
 }
 
@@ -50,6 +59,9 @@ vector<int> processArray(const vector<int>& numbers, int threadCount) {
     vector<int> primes;
     vector<thread> threads;
     size_t totalNumbers = numbers.size();
+
+    threads.reserve(threadCount);
+
     size_t numbersPerThread = totalNumbers / threadCount;
 
     for (int i = 0; i < threadCount; ++i) {
@@ -67,7 +79,6 @@ vector<int> processArray(const vector<int>& numbers, int threadCount) {
     return primes;
 }
 
-
 // Serialization function
 void sendSerializedPrimes(SOCKET clientSocket, const vector<int>& primes) {
     size_t primesCount = primes.size();
@@ -78,8 +89,6 @@ void sendSerializedPrimes(SOCKET clientSocket, const vector<int>& primes) {
     cout << "Serializing and Sending Primes:" << endl;
     for (size_t i = 0; i < primesCount; ++i) {
         int primeNetworkOrder = htonl(primes[i]);
-        // print the primeNetworkOrder
-        cout << "Prime Serialized (Network Byte Order): " << primes[i] << " to " << primeNetworkOrder << endl;
         memcpy(&buffer[i * sizeof(int)], &primeNetworkOrder, sizeof(int));
     }
 
@@ -127,7 +136,7 @@ int main() {
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = inet_addr("192.168.1.37"); // Change to the server's IP address
     serverAddr.sin_port = htons(12345);
-        
+
     if (connect(clientSocket, reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr)) == SOCKET_ERROR) {
         std::cerr << "Connection failed." << std::endl;
         closesocket(clientSocket);
@@ -137,15 +146,18 @@ int main() {
 
     std::cout << "Connected to server." << std::endl;
 
-    vector<int> primes = receiveArrayFromMaster(clientSocket);
-        
-    // print primes
-    for (int i = 0; i < primes.size(); i++) {
-		cout << primes[i] << " ";
-	}
+    int threadCount = 0;
 
-    // print prime count
-    cout << endl << "Number count: " << primes.size() << endl;
+    vector<int> numbers = receiveArrayFromMaster(clientSocket, threadCount);
+
+    cout << "Processing Array" << endl;
+
+    vector<int> primes = processArray(numbers, threadCount);
+
+    // print primes (uncomment for debugging)
+    //for (int i = 0; i < primes.size(); i++) {
+    //    cout << primes[i] << " ";
+    //}
 
     sendSerializedPrimes(clientSocket, primes);
 
