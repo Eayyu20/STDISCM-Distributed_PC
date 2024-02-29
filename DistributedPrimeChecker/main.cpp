@@ -145,6 +145,19 @@ int main() {
     int lowerLimit = 2;
     int threadCount = 1;
     clock_t start, end;
+    bool useSlave = false;
+    char userInput;
+
+    // Ask the user if they want to use a distributed model
+    cout << "Do you want to run with a distributed model? (y/n): ";
+    cin >> userInput;
+    userInput = tolower(userInput);
+
+    while (userInput != 'y' && userInput != 'n') {
+        cout << "Invalid input. Please enter 'y' for yes or 'n' for no: ";
+        cin >> userInput;
+        userInput = tolower(userInput);
+    }
 
     do {
         cout << "Enter lower bound (must be greater than or equal to 1): ";
@@ -184,42 +197,53 @@ int main() {
     bool turn = true;
     //Remove even numbers from the range and sort them into masterPrimes and slavePrimes
     for (int i = lowerLimit; i <= upperLimit; i++) {
-        if (i % 2 != 0) {
-            if (turn) {
+        if (!useSlave) {
+            if (i % 2 != 0) {
                 masterPrimes.push_back(i);
             }
-            else {
-                slavePrimes.push_back(i);
+        }
+        else {
+            if (i % 2 != 0) {
+                if (turn) {
+                    masterPrimes.push_back(i);
+                }
+                else {
+                    slavePrimes.push_back(i);
+                }
+                turn = !turn;
             }
-            turn = !turn;
-		}
+        }
 	}
 
-    // Listen for incoming connections
-    if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR) {
-        std::cerr << "Listen failed." << std::endl;
-        closesocket(serverSocket);
-        WSACleanup();
-        return 1;
+    SOCKET clientSocket = INVALID_SOCKET; // Initialize to an invalid socket
+
+    if (useSlave) {
+        // Listen for incoming connections
+        if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR) {
+            std::cerr << "Listen failed." << std::endl;
+            closesocket(serverSocket);
+            WSACleanup();
+            return 1;
+        }
+
+        std::cout << "Waiting for a connection..." << std::endl;
+
+        // Accept a client connection
+        clientSocket = accept(serverSocket, nullptr, nullptr);
+        if (clientSocket == INVALID_SOCKET) {
+            std::cerr << "Accept failed." << std::endl;
+            closesocket(serverSocket);
+            WSACleanup();
+            return 1;
+        }
+
+        std::cout << "Connection established." << std::endl;
+
+        //Append threadCount to slave
+        slavePrimes.push_back(threadCount);
+        //Send data to slave
+        sendSerializedPrimes(clientSocket, slavePrimes);
     }
-
-    std::cout << "Waiting for a connection..." << std::endl;
-
-    // Accept a client connection
-    SOCKET clientSocket = accept(serverSocket, nullptr, nullptr);
-    if (clientSocket == INVALID_SOCKET) {
-        std::cerr << "Accept failed." << std::endl;
-        closesocket(serverSocket);
-        WSACleanup();
-        return 1;
-    }
-
-    std::cout << "Connection established." << std::endl;
-    
-    //Append threadCount to slave
-    slavePrimes.push_back(threadCount);
-    //Send data to slave
-    sendSerializedPrimes(clientSocket, slavePrimes);
 
     //start timer
     start = clock();
@@ -237,18 +261,20 @@ int main() {
     for (auto& thread : threads) {
         thread.join();
     }
- 
-    // Receive and deserialize the primes from the server
-    std::vector<int> receivedPrimes = receiveSerializedPrimes(clientSocket);
 
-    //Remove first element from receivedPrimes -> 0
-    receivedPrimes.erase(receivedPrimes.begin());
+    if (useSlave) {
+        // Receive and deserialize the primes from the server
+        std::vector<int> receivedPrimes = receiveSerializedPrimes(clientSocket);
 
-    //print size of primes
-    cout << "Primes received Count: " << receivedPrimes.size() << endl;
+        //Remove first element from receivedPrimes -> 0
+        receivedPrimes.erase(receivedPrimes.begin());
 
-    //Merge the primes 
-    primes.insert(primes.end(), receivedPrimes.begin(), receivedPrimes.end());
+        //print size of primes
+        cout << "Primes received Count: " << receivedPrimes.size() << endl;
+
+        //Merge the primes 
+        primes.insert(primes.end(), receivedPrimes.begin(), receivedPrimes.end());
+    }
  
     //Print prime size
     cout << "Primes Count: " << primes.size() << endl;
@@ -263,7 +289,10 @@ int main() {
     cout << " sec " << endl;
 
     // Close sockets
-    closesocket(clientSocket);
+    if (useSlave) {
+		closesocket(clientSocket);
+	}
+
     closesocket(serverSocket);
 
     // Cleanup Winsock
