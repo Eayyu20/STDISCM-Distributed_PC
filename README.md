@@ -12,7 +12,7 @@ This project demonstrates a distributed computing approach to calculate prime nu
 
 1. **Winsock2 Library**: Ensure that the Winsock2 library is accessible to your compiler. This project uses `winsock2.h`, which is typically available on Windows systems.
 
-2. **Configuration**: Configure the IP address and port in the slave component to match the master's listening address and port.
+2. **Configuration**: Configure the IP address and port in the slave component to match the master's listening address and port. Ensure that both Master and Slave are connected to the same network.
 
 3. **Compilation**: Compile both the master and slave components using your C++ compiler. For example, with g++:
 
