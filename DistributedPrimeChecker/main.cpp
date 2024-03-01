@@ -159,6 +159,10 @@ int main() {
         userInput = tolower(userInput);
     }
 
+    if (userInput == 'y') {
+        useSlave = 1;
+    }
+
     do {
         cout << "Enter lower bound (must be greater than or equal to 1): ";
         cin >> lowerLimit;
